@@ -303,6 +303,10 @@ textarea {
   justify-content: flex-end;
 }
 
+.filters-row {
+  margin-bottom: 1rem;
+}
+
 .task-list {
   list-style: none;
   margin: 0;
@@ -330,6 +334,11 @@ textarea {
 .task-card.done h3 {
   text-decoration: line-through;
   color: var(--muted);
+}
+
+.task-card.overdue {
+  border-color: rgba(240, 113, 120, 0.45);
+  box-shadow: inset 0 0 0 1px rgba(240, 113, 120, 0.25);
 }
 
 .task-main {
@@ -391,6 +400,30 @@ textarea {
   background: rgba(139, 154, 173, 0.12);
   color: var(--muted);
   border: 1px solid rgba(139, 154, 173, 0.25);
+}
+
+.badge.work {
+  background: rgba(61, 214, 195, 0.12);
+  color: var(--accent);
+  border: 1px solid rgba(61, 214, 195, 0.25);
+}
+
+.badge.personal {
+  background: rgba(120, 140, 255, 0.15);
+  color: #c6d0ff;
+  border: 1px solid rgba(120, 140, 255, 0.35);
+}
+
+.badge.study {
+  background: rgba(235, 192, 109, 0.12);
+  color: var(--warning);
+  border: 1px solid rgba(235, 192, 109, 0.3);
+}
+
+.badge.overdue {
+  background: rgba(240, 113, 120, 0.15);
+  color: #ffb4b8;
+  border: 1px solid rgba(240, 113, 120, 0.35);
 }
 
 .empty {
