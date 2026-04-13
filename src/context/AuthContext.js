@@ -7,7 +7,11 @@ const TOKEN_KEY = 'todo_token';
 const USER_KEY = 'todo_user';
 
 export function AuthProvider({ children }) {
-  const [token, setTokenState] = useState(() => localStorage.getItem(TOKEN_KEY));
+  const [token, setTokenState] = useState(() => {
+    const savedToken = localStorage.getItem(TOKEN_KEY);
+    if (savedToken) setAuthToken(savedToken);
+    return savedToken;
+  });
   const [user, setUser] = useState(() => {
     const raw = localStorage.getItem(USER_KEY);
     if (!raw) return null;
@@ -21,6 +25,8 @@ export function AuthProvider({ children }) {
   React.useEffect(() => {
     if (token) {
       setAuthToken(token);
+    } else {
+      setAuthToken(null);
     }
   }, [token]);
 
