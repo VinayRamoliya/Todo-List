@@ -37,6 +37,37 @@ const DEFAULT_TASK_SUMMARY = {
   categories: { work: 0, personal: 0, study: 0 },
 };
 
+function buildSummaryFromTasks(tasks) {
+  const safeTasks = Array.isArray(tasks) ? tasks : [];
+  const now = Date.now();
+  const summary = {
+    ...DEFAULT_TASK_SUMMARY,
+    total: safeTasks.length,
+    categories: { ...DEFAULT_TASK_SUMMARY.categories },
+  };
+
+  safeTasks.forEach((task) => {
+    if (task.status === 'completed') {
+      summary.completed += 1;
+    } else {
+      summary.pending += 1;
+    }
+
+    if (task.category && summary.categories[task.category] !== undefined) {
+      summary.categories[task.category] += 1;
+    }
+
+    if (task.status !== 'completed' && task.deadline) {
+      const deadline = new Date(task.deadline).getTime();
+      if (!Number.isNaN(deadline) && deadline < now) {
+        summary.overdue += 1;
+      }
+    }
+  });
+
+  return summary;
+}
+
 function normalizeSummary(data) {
   if (!data || typeof data !== 'object') return { ...DEFAULT_TASK_SUMMARY };
   return {
@@ -83,6 +114,21 @@ export default function Dashboard() {
       const { data } = await api.get('/tasks/summary');
       setSummary(normalizeSummary(data));
     } catch (err) {
+      if (err.response?.status === 404) {
+        try {
+          const { data: tasksData } = await api.get('/tasks');
+          setSummary(buildSummaryFromTasks(tasksData));
+          return;
+        } catch (fallbackErr) {
+          if (fallbackErr.response?.status === 401) {
+            logout();
+            navigate('/login', { replace: true });
+            return;
+          }
+          setError(fallbackErr.response?.data?.message || 'Could not refresh overview.');
+          return;
+        }
+      }
       if (err.response?.status === 401) {
         logout();
         navigate('/login', { replace: true });
@@ -99,12 +145,21 @@ export default function Dashboard() {
       if (filters.search.trim()) params.search = filters.search.trim();
       if (filters.status !== 'all') params.status = filters.status;
       if (filters.category !== 'all') params.category = filters.category;
-      const [tasksRes, summaryRes] = await Promise.all([
-        api.get('/tasks', { params }),
-        api.get('/tasks/summary'),
-      ]);
-      setTasks(Array.isArray(tasksRes.data) ? tasksRes.data : []);
-      setSummary(normalizeSummary(summaryRes.data));
+      const tasksRes = await api.get('/tasks', { params });
+      const nextTasks = Array.isArray(tasksRes.data) ? tasksRes.data : [];
+      setTasks(nextTasks);
+
+      try {
+        const summaryRes = await api.get('/tasks/summary');
+        setSummary(normalizeSummary(summaryRes.data));
+      } catch (summaryErr) {
+        if (summaryErr.response?.status === 404) {
+          const { data: allTasksData } = await api.get('/tasks');
+          setSummary(buildSummaryFromTasks(allTasksData));
+        } else {
+          throw summaryErr;
+        }
+      }
     } catch (err) {
       if (err.response?.status === 401) {
         logout();
