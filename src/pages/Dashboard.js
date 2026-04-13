@@ -29,6 +29,26 @@ function isOverdue(task) {
   return deadlineDate.getTime() < now.getTime();
 }
 
+const DEFAULT_TASK_SUMMARY = {
+  total: 0,
+  pending: 0,
+  completed: 0,
+  overdue: 0,
+  categories: { work: 0, personal: 0, study: 0 },
+};
+
+function normalizeSummary(data) {
+  if (!data || typeof data !== 'object') return { ...DEFAULT_TASK_SUMMARY };
+  return {
+    ...DEFAULT_TASK_SUMMARY,
+    ...data,
+    categories: {
+      ...DEFAULT_TASK_SUMMARY.categories,
+      ...(data.categories && typeof data.categories === 'object' ? data.categories : {}),
+    },
+  };
+}
+
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -56,6 +76,21 @@ export default function Dashboard() {
     status: 'all',
     category: 'all',
   });
+  const [summary, setSummary] = useState(DEFAULT_TASK_SUMMARY);
+
+  const refreshSummary = useCallback(async () => {
+    try {
+      const { data } = await api.get('/tasks/summary');
+      setSummary(normalizeSummary(data));
+    } catch (err) {
+      if (err.response?.status === 401) {
+        logout();
+        navigate('/login', { replace: true });
+        return;
+      }
+      setError(err.response?.data?.message || 'Could not refresh overview.');
+    }
+  }, [logout, navigate]);
 
   const loadTasks = useCallback(async () => {
     setError('');
@@ -64,8 +99,12 @@ export default function Dashboard() {
       if (filters.search.trim()) params.search = filters.search.trim();
       if (filters.status !== 'all') params.status = filters.status;
       if (filters.category !== 'all') params.category = filters.category;
-      const { data } = await api.get('/tasks', { params });
-      setTasks(Array.isArray(data) ? data : []);
+      const [tasksRes, summaryRes] = await Promise.all([
+        api.get('/tasks', { params }),
+        api.get('/tasks/summary'),
+      ]);
+      setTasks(Array.isArray(tasksRes.data) ? tasksRes.data : []);
+      setSummary(normalizeSummary(summaryRes.data));
     } catch (err) {
       if (err.response?.status === 401) {
         logout();
@@ -98,6 +137,7 @@ export default function Dashboard() {
       });
       setTasks((prev) => [data, ...prev]);
       setForm({ title: '', description: '', priority: 'medium', category: 'work', deadline: '' });
+      await refreshSummary();
     } catch (err) {
       setError(err.response?.data?.message || 'Could not add task.');
     } finally {
@@ -143,6 +183,7 @@ export default function Dashboard() {
       });
       setTasks((prev) => prev.map((t) => (t._id === id ? data : t)));
       cancelEdit();
+      await refreshSummary();
     } catch (err) {
       setError(err.response?.data?.message || 'Could not edit task.');
     }
@@ -152,6 +193,7 @@ export default function Dashboard() {
     try {
       const { data } = await api.patch(`/tasks/${id}`, { status: 'completed' });
       setTasks((prev) => prev.map((t) => (t._id === id ? data : t)));
+      await refreshSummary();
     } catch (err) {
       setError(err.response?.data?.message || 'Could not update task.');
     }
@@ -161,8 +203,18 @@ export default function Dashboard() {
     try {
       await api.delete(`/tasks/${id}`);
       setTasks((prev) => prev.filter((t) => t._id !== id));
+      await refreshSummary();
     } catch (err) {
       setError(err.response?.data?.message || 'Could not delete task.');
+    }
+  }
+
+  async function handleClearCompleted() {
+    try {
+      await api.delete('/tasks/completed');
+      await loadTasks();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Could not clear completed tasks.');
     }
   }
 
@@ -246,6 +298,42 @@ export default function Dashboard() {
       </section>
 
       {error ? <div className="alert error">{error}</div> : null}
+
+      <section className="panel">
+        <div className="panel-head">
+          <h2>Overview</h2>
+          <button
+            type="button"
+            className="btn small ghost"
+            onClick={handleClearCompleted}
+            disabled={summary.completed === 0}
+          >
+            Clear completed
+          </button>
+        </div>
+        <div className="stats-grid">
+          <div className="stat-card">
+            <p className="muted small">Total</p>
+            <h3>{summary.total}</h3>
+          </div>
+          <div className="stat-card">
+            <p className="muted small">Pending</p>
+            <h3>{summary.pending}</h3>
+          </div>
+          <div className="stat-card">
+            <p className="muted small">Completed</p>
+            <h3>{summary.completed}</h3>
+          </div>
+          <div className="stat-card">
+            <p className="muted small">Overdue</p>
+            <h3>{summary.overdue}</h3>
+          </div>
+        </div>
+        <p className="task-meta muted small">
+          Work: {summary.categories?.work || 0} · Personal: {summary.categories?.personal || 0} · Study:{' '}
+          {summary.categories?.study || 0}
+        </p>
+      </section>
 
       <section className="panel">
         <div className="panel-head">
